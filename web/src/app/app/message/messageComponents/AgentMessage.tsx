@@ -22,13 +22,13 @@ import { useAuthErrors } from "@/app/app/message/messageComponents/hooks/useAuth
 import { getMessageSwitching } from "@/app/app/message/messageComponents/messageSwitching";
 import { RendererComponent } from "@/app/app/message/messageComponents/renderMessageComponent";
 import { GeneratedImageGrid } from "@/app/app/message/messageComponents/renderers/ImageToolRenderer";
-import { usePacketProcessor } from "@/app/app/message/messageComponents/timeline/hooks/usePacketProcessor";
-import { usePacedTurnGroups } from "@/app/app/message/messageComponents/timeline/hooks/usePacedTurnGroups";
+import { usePacketProcessor } from "@/lib/timeline/chat/hooks/usePacketProcessor";
+import { usePacedTurnGroups } from "@/lib/timeline/chat/hooks/usePacedTurnGroups";
 import MessageToolbar from "@/app/app/message/messageComponents/MessageToolbar";
 import { LlmDescriptor, LlmManager } from "@/lib/hooks";
 import { Message } from "@/app/app/types";
 import { Text } from "@opal/components";
-import { AgentTimeline } from "@/app/app/message/messageComponents/timeline/AgentTimeline";
+import { AgentTimeline } from "@/lib/timeline/chat/AgentTimeline";
 import { useVoiceMode } from "@/providers/VoiceModeProvider";
 import { getTextContent } from "@/app/app/services/packetUtils";
 import { removeThinkingTokens } from "@/app/app/services/thinkingTokens";
