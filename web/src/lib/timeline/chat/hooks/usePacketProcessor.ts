@@ -26,7 +26,13 @@ import {
 export interface UsePacketProcessorResult {
   // Data
   toolGroups: GroupedPacket[];
+  /** The final answer: message text after the last tool step. */
   displayGroups: GroupedPacket[];
+  /**
+   * Message text that a later tool step follows. It renders in place, between
+   * the steps, without waiting for the final answer.
+   */
+  interimDisplayGroups: GroupedPacket[];
   toolTurnGroups: TurnGroup[];
   /** A code mode program works between tool calls; it has no step. */
   codeModeWorking: boolean;
@@ -109,15 +115,33 @@ export function usePacketProcessor(
 
   // Derive displayGroups (not state!)
   const effectiveFinalAnswerComing = state.finalAnswerComing || forceShowAnswer;
+  const lastToolTurn = useMemo(
+    () =>
+      state.toolGroups.reduce(
+        (latest, group) => Math.max(latest, group.turn_index),
+        -1
+      ),
+    [state.toolGroups]
+  );
+  const interimDisplayGroups = useMemo(
+    () =>
+      state.potentialDisplayGroups.filter(
+        (group) => group.turn_index < lastToolTurn
+      ),
+    [state.potentialDisplayGroups, lastToolTurn]
+  );
   const displayGroups = useMemo(() => {
     if (effectiveFinalAnswerComing || state.toolGroups.length === 0) {
-      return state.potentialDisplayGroups;
+      return state.potentialDisplayGroups.filter(
+        (group) => group.turn_index >= lastToolTurn
+      );
     }
     return [];
   }, [
     effectiveFinalAnswerComing,
     state.toolGroups.length,
     state.potentialDisplayGroups,
+    lastToolTurn,
   ]);
 
   // Transform toolGroups to timeline format
@@ -143,6 +167,7 @@ export function usePacketProcessor(
     // Data
     toolGroups: state.toolGroups,
     displayGroups,
+    interimDisplayGroups,
     toolTurnGroups,
     codeModeWorking,
     citations: state.citations,
