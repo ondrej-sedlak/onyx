@@ -12,8 +12,6 @@ from sqlalchemy.orm import Session
 
 from onyx.db.models import Skill, User
 from onyx.db.skill import RuntimeSkill, RuntimeSkillVersion
-from onyx.error_handling.error_codes import OnyxErrorCode
-from onyx.error_handling.exceptions import OnyxError
 from onyx.file_store.file_store import FileStore
 from onyx.skills import push
 
@@ -70,16 +68,6 @@ def test_skill_runtime_hash_covers_files_and_connectable_apps() -> None:
     assert push.compute_skill_runtime_hash(
         files, "apps"
     ) != push.compute_skill_runtime_hash(files, "different apps")
-
-
-def test_assemble_rejects_duplicate_names() -> None:
-    user = cast(User, SimpleNamespace())
-    skills = [_skill(is_valid=True), _skill(is_valid=True)]
-
-    with pytest.raises(OnyxError) as exc_info:
-        push._assemble_fileset(skills, user, MagicMock(spec=Session))
-
-    assert exc_info.value.error_code == OnyxErrorCode.INTERNAL_ERROR
 
 
 def test_assemble_classifies_and_hydrates_valid_unclassified_skill(
