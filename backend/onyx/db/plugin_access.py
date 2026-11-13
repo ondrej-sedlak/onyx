@@ -74,6 +74,7 @@ from onyx.db.scoped_permissions import (
     managed_group_member_ids_subquery,
     scoped_group_ids_subquery,
 )
+from onyx.skills.limits import SkillUsage
 
 UserIdExpr = UUID | ColumnElement[UUID] | InstrumentedAttribute[UUID]
 
@@ -348,11 +349,15 @@ class UserPluginState:
     # The user's choice under the setting, before the name order.
     enabled: bool
     # Enabled, the version is not invalid, and the app it needs, if any, is
-    # ready for the user.
+    # ready for the user. Only these plugins count for the skill limits.
     can_run: bool
     created_at: datetime
     # Names from the plugin_skill rows of the version the user runs, by path.
     skill_names: tuple[str, ...]
+    # Recorded size of the version the user runs; a NULL size or file count
+    # is 0. None when both are NULL: a backfilled version before the repair
+    # task measures it, or a version with no bundle.
+    usage: SkillUsage | None
 
     @property
     def name_rank(self) -> SkillNameRank:
@@ -435,10 +440,13 @@ def load_user_plugin_states(
     user_ids: Iterable[UUID],
     db_session: Session,
     plugin_ids: Iterable[UUID] | None = None,
+    *,
+    runnable_only: bool = False,
 ) -> list[UserPluginState]:
     """The state of each plugin for each user, in one query, then one query
     for app connections. With ``plugin_ids``, every pair of the users and
-    those plugins; without, only the plugins each user can see."""
+    those plugins; without, only the plugins each user can see.
+    ``runnable_only`` keeps only the plugins that can run."""
     users = sorted(set(user_ids))
     if not users:
         return []
@@ -474,11 +482,15 @@ def load_user_plugin_states(
             enabled,
             pairs.c.created_at,
             skill_names,
+            PluginVersion.unpacked_size_bytes,
+            PluginVersion.file_count,
         )
         .join(PluginVersion, PluginVersion.id == pairs.c.version_id)
         .outerjoin(UserPluginPreference, _preference_of_pair(pairs))
         .order_by(pairs.c.user_id, pairs.c.plugin_id)
     )
+    if runnable_only:
+        stmt = stmt.where(enabled, PluginVersion.is_valid.is_not(False))
     rows = db_session.execute(stmt).all()
     apps = app_dependency_states(
         {row[0] for row in rows}, db_session, {row[1] for row in rows if row[10]}
@@ -490,6 +502,8 @@ def load_user_plugin_states(
             and row[9] is not False
             and not waits_for_app(apps.get((row[0], row[1])))
         )
+        if runnable_only and not can_run:
+            continue
         states.append(
             UserPluginState(
                 user_id=row[0],
@@ -506,9 +520,27 @@ def load_user_plugin_states(
                 can_run=can_run,
                 created_at=row[11],
                 skill_names=tuple(row[12] or ()),
+                usage=(
+                    None
+                    if row[13] is None and row[14] is None
+                    else SkillUsage(bytes=row[13] or 0, files=row[14] or 0)
+                ),
             )
         )
     return states
+
+
+def skill_usage_by_user(states: Iterable[UserPluginState]) -> dict[UUID, SkillUsage]:
+    """Usage of the plugins each user can run, before the name order. A
+    version with no recorded size counts as 0. Built-in skills are not
+    plugins and are not counted."""
+    usage: dict[UUID, SkillUsage] = {}
+    for state in states:
+        if state.can_run:
+            usage[state.user_id] = usage.get(state.user_id, SkillUsage()) + (
+                state.usage or SkillUsage()
+            )
+    return usage
 
 
 @dataclass(frozen=True)
