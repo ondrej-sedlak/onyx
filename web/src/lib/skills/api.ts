@@ -22,9 +22,11 @@ import type {
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errorCode: string | undefined;
+    let responseBody: unknown = null;
     let detail = `Request failed (${res.status})`;
     try {
       const body = await res.json();
+      responseBody = body;
       if (typeof body?.error_code === "string") errorCode = body.error_code;
       if (typeof body?.detail === "string") detail = body.detail;
       else if (Array.isArray(body?.detail) && body.detail[0]?.msg) {
@@ -35,8 +37,10 @@ async function handle<T>(res: Response): Promise<T> {
     }
     const error = new Error(detail) as Error & {
       errorCode: string | undefined;
+      responseBody: unknown;
     };
     error.errorCode = errorCode;
+    error.responseBody = responseBody;
     throw error;
   }
   if (res.status === 204) {

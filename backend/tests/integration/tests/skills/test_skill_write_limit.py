@@ -148,6 +148,32 @@ def test_upload_refused_past_5000_files() -> None:
     assert name not in _custom_names(user)
 
 
+def test_batch_upload_reports_limit_per_skill() -> None:
+    user = UserManager.create(name=unique_name("limit_batch"))
+    _fill(user, free_bytes=10, free_files=100)
+
+    name = unique_name("batch-too-big")
+    response = client.post(
+        f"{API_SERVER_URL}/skills/custom/batch",
+        files=[
+            (
+                "bundles",
+                (
+                    f"{name}.zip",
+                    io.BytesIO(_bundle(name, extra_bytes=64)),
+                    "application/zip",
+                ),
+            )
+        ],
+        headers=_multipart_headers(user),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["imported"] == []
+    (refused,) = body["not_imported"]
+    assert "The limit is 500 MB" in refused["reason"]
+
+
 def test_toggle_on_refused_with_usage() -> None:
     owner = UserManager.create(name=unique_name("toggle_owner"))
     user = UserManager.create(name=unique_name("toggle_user"))

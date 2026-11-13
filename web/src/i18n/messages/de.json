@@ -15885,6 +15885,12 @@
       "resetDefaults": "Alle auf Standardwerte zurücksetzen",
       "resetAll": "Alle auf Workspace-Standardwerte zurücksetzen",
       "workspaceDisabledTooltip": "Ein Admin hat diese Aktion für den Workspace deaktiviert."
+    },
+    "skillRuntimeNotice": {
+      "title": "{count, plural, one {# Skill wurde nicht geladen} other {# Skills wurden nicht geladen}}",
+      "description": "Diese Sitzung kann {names} nicht verwenden. Ihre Skills müssen in {maxSize} und {maxFiles, number} Dateien passen. Deaktivieren Sie Skills, die Sie nicht brauchen, um Platz zu schaffen.",
+      "manage": "Skills verwalten",
+      "dismiss": "Schließen"
     }
   },
   "knowledge": {
@@ -17754,6 +17760,16 @@
       },
       "card": "Gruppen: {groups}",
       "entry": "{name}: {policy}"
+    },
+    "limit": {
+      "refused": {
+        "you": "Diese Änderung bringt Sie über das Skill-Limit von {maxSize} oder {maxFiles, number} Dateien. Deaktivieren Sie Skills, die Sie nicht verwenden, und versuchen Sie es erneut."
+      },
+      "banner": {
+        "title": "{count, plural, one {# Benutzer ist über dem Skill-Limit} other {# Benutzer sind über dem Skill-Limit}}",
+        "description": "Ein Benutzer mit mehr als {maxSize} oder {maxFiles, number} Dateien an Skills kann keine weiteren aktivieren. Ändern Sie Gruppeneinstellungen oder bitten Sie Benutzer, Skills zu deaktivieren.",
+        "user": "{email}: {size}, {files, plural, one {# Datei} other {# Dateien}}, {notLoaded, plural, one {# Skill nicht geladen} other {# Skills nicht geladen}}"
+      }
     }
   },
   "opensearchHealth": {

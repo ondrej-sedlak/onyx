@@ -55,6 +55,15 @@
   Custom cards show Personal, Shared, or Organization access from
   `public_permission` and the server's `is_personal`; share-detail arrays can
   be hidden, so empty arrays do not mean a skill is personal.
+- **Skill limit notices.** A refused write of the user's own (413
+  `SKILL_LIMIT_EXCEEDED`) shows the limit where the user made the change
+  (`web/src/lib/skills/limits.ts:useSkillLimitCopy`). Bulk and import rows
+  show the server's text. When `SessionResponse.skill_omissions` lists skills
+  the run-time rule left out, `SkillRuntimeNotice`
+  (`web/src/app/craft/components/`) shows a card above the composer with
+  their names, **Manage skills** and **Dismiss**. It waits while the session
+  is stale. The admin Skills page shows `SkillLimitUsersBanner`
+  (`web/src/sections/skills/`) when `GET /skills/users-over-limit` lists users.
 - **Skill dialog.** Owners and editors open custom cards in a single
   Details/Sharing dialog. Share actions open its Sharing tab directly. Draft
   sharing edits survive tab switches. Other recipients and built-in skills
@@ -557,7 +566,7 @@ The library preview of an external-app skill calls the same renderer
     editor create, and bundle save, restore and replace. Admin changes
     (settings, shares, Default access, publish, approve, transfer), app connect
     and group membership are never checked: the run-time rule and the admin
-    list handle a user they put past the limit. A user already over is not
+    banner handle a user they put past the limit. A user already over is not
     refused.
 26. `runtime-skill-limit` **A sandbox gets every plugin that fits in 900 MB
     and 10,000 files.** `skills/push.py:build_user_skills_payload` applies it,
@@ -571,6 +580,7 @@ The library preview of an external-app skill calls the same renderer
     transport cap (see [[craft-sandboxes]]). Left-out plugins (`SkillOmission`:
     id, name, bytes, files, reason) go to `sandbox.skill_omissions` together
     with `skills_hash`, so they describe the content on that disk.
+    `SessionResponse.skill_omissions` carries them to the session UI.
     `GET /skills/users-over-limit` (`MANAGE_PLUGINS`,
     `db/skill_limit.py:users_past_write_limit`) lists active users past the
     write limit with their size, files and the omission count of their

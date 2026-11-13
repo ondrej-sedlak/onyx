@@ -30,6 +30,7 @@ import type {
   SkillVersionPreview,
 } from "@/lib/skills/types";
 import { SkillInstructionsPanel } from "@/sections/modals/SkillPreviewModal";
+import { useSkillLimitCopy } from "@/lib/skills/limits";
 
 interface SkillVersionsTabProps {
   skill: CustomSkill;
@@ -52,6 +53,7 @@ export default function SkillVersionsTab({
 }: SkillVersionsTabProps) {
   const skillId = skill.id;
   const t = useTranslations("skills.modals.versions");
+  const { describeError } = useSkillLimitCopy();
   const editorCopy = useTranslations("skills.editor");
   const format = useFormatter();
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
@@ -102,9 +104,7 @@ export default function SkillVersionsTab({
         return;
       }
       console.error("Failed to restore skill version", err);
-      toast.error(
-        err instanceof Error ? err.message : t("restore.failedToast")
-      );
+      toast.error(describeError(err, t("restore.failedToast")));
     } finally {
       setBusy(false);
     }
@@ -140,9 +140,7 @@ export default function SkillVersionsTab({
         return;
       }
       console.error("Failed to publish skill update", err);
-      toast.error(
-        err instanceof Error ? err.message : t("publishUpdate.failedToast")
-      );
+      toast.error(describeError(err, t("publishUpdate.failedToast")));
     } finally {
       setBusy(false);
     }

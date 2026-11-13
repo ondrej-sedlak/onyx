@@ -22,6 +22,7 @@ import type {
   SkillReviewRequest,
   SkillVersionPreview,
 } from "@/lib/skills/types";
+import { useSkillLimitCopy } from "@/lib/skills/limits";
 import { SkillInstructionsPanel } from "@/sections/modals/SkillPreviewModal";
 
 type ReviewDecision = "approve" | "deny";
@@ -47,6 +48,7 @@ export default function SkillReviewRequests({
 }: SkillReviewRequestsProps) {
   const t = useTranslations("skills.reviewRequests");
   const versionCopy = useTranslations("skills.modals.versions");
+  const { describeError } = useSkillLimitCopy();
   const format = useFormatter();
   const versionLabel = useVersionLabel();
   const [reviewing, setReviewing] = useState<SkillReviewRequest | null>(null);
@@ -76,7 +78,7 @@ export default function SkillReviewRequests({
       onReviewed();
     } catch (err) {
       console.error(`Failed to ${decision} skill publish request`, err);
-      toast.error(err instanceof Error ? err.message : t("failedToast"));
+      toast.error(describeError(err, t("failedToast")));
     } finally {
       setBusy(false);
       await refreshRequests();

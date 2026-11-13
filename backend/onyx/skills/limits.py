@@ -69,17 +69,25 @@ def runtime_keep_key(
 
 
 class SkillOmission(BaseModel):
-    """A plugin the run-time limit left out of a sandbox."""
+    """A plugin that the run-time limit left out of a sandbox."""
 
     model_config = ConfigDict(frozen=True)
 
     plugin_id: UUID
     name: str
-    # Charged size and file count of the version the user runs.
+    # Size and file count of the version the user runs.
     bytes: int
     files: int
-    # The run-time limit it would break.
+    # The limit it would break.
     reason: Literal["bytes", "files"]
+
+
+class SkillLimitNotice(BaseModel):
+    """The plugins the run-time limit left out, and that limit."""
+
+    skills: list[SkillOmission]
+    max_bytes: int
+    max_files: int
 
 
 class SkillUsageModel(BaseModel):
@@ -94,3 +102,13 @@ class SkillLimitRefusal(BaseModel):
     usage: SkillUsageModel
     max_bytes: int
     max_files: int
+
+
+def runtime_limit_notice(skills: list[SkillOmission]) -> SkillLimitNotice | None:
+    if not skills:
+        return None
+    return SkillLimitNotice(
+        skills=skills,
+        max_bytes=SKILL_RUNTIME_MAX_BYTES,
+        max_files=SKILL_RUNTIME_MAX_FILES,
+    )
