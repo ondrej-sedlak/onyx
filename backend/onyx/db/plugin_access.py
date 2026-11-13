@@ -34,6 +34,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import IntEnum
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import (
@@ -51,6 +52,7 @@ from sqlalchemy.sql.elements import KeyedColumnElement
 from sqlalchemy.sql.selectable import Subquery
 
 from onyx.db.enums import (
+    AccountType,
     MarketplaceKind,
     PluginInstallationPolicy,
     SandboxStatus,
@@ -74,7 +76,7 @@ from onyx.db.scoped_permissions import (
     managed_group_member_ids_subquery,
     scoped_group_ids_subquery,
 )
-from onyx.skills.limits import SkillUsage
+from onyx.skills.limits import KeepGroup, SkillUsage, runtime_keep_key
 
 UserIdExpr = UUID | ColumnElement[UUID] | InstrumentedAttribute[UUID]
 
@@ -358,6 +360,12 @@ class UserPluginState:
     # is 0. None when both are NULL: a backfilled version before the repair
     # task measures it, or a version with no bundle.
     usage: SkillUsage | None
+    # The user turned the plugin on (a saved choice, not the default).
+    turned_on: bool
+    enabled_at: datetime | None
+    # The latest share or group row the user gets the plugin through, else
+    # when the plugin was created.
+    shared_at: datetime
 
     @property
     def name_rank(self) -> SkillNameRank:
@@ -368,6 +376,20 @@ class UserPluginState:
         if self.is_author:
             return SkillNameRank.OWN
         return SkillNameRank.SHARED
+
+    @property
+    def keep_key(self) -> tuple[int, float, UUID]:
+        """Run-time keep order: Required, then turned on, then Installed by
+        default; the most recent first inside each."""
+        if self.installation_policy == PluginInstallationPolicy.REQUIRED:
+            return runtime_keep_key(KeepGroup.REQUIRED, self.shared_at, self.plugin_id)
+        if self.turned_on:
+            return runtime_keep_key(
+                KeepGroup.TURNED_ON, self.enabled_at, self.plugin_id
+            )
+        return runtime_keep_key(
+            KeepGroup.INSTALLED_BY_DEFAULT, self.shared_at, self.plugin_id
+        )
 
 
 def skill_name_order_key(
@@ -436,24 +458,56 @@ def _preference_of_pair(pairs: Subquery) -> ColumnElement[bool]:
     )
 
 
+def _shared_at(pairs: Subquery) -> ColumnElement[datetime]:
+    direct_share = (
+        select(Plugin__User.created_at)
+        .where(
+            Plugin__User.plugin_id == pairs.c.plugin_id,
+            Plugin__User.user_id == pairs.c.user_id,
+        )
+        .correlate(pairs)
+        .scalar_subquery()
+    )
+    group_row = (
+        select(func.max(Plugin__UserGroup.created_at))
+        .join(
+            User__UserGroup,
+            User__UserGroup.user_group_id == Plugin__UserGroup.user_group_id,
+        )
+        .where(
+            Plugin__UserGroup.plugin_id == pairs.c.plugin_id,
+            User__UserGroup.user_id == pairs.c.user_id,
+        )
+        .correlate(pairs)
+        .scalar_subquery()
+    )
+    return func.coalesce(func.greatest(direct_share, group_row), pairs.c.created_at)
+
+
 def load_user_plugin_states(
-    user_ids: Iterable[UUID],
+    users: Iterable[UUID] | ColumnElement[bool],
     db_session: Session,
     plugin_ids: Iterable[UUID] | None = None,
     *,
     runnable_only: bool = False,
 ) -> list[UserPluginState]:
     """The state of each plugin for each user, in one query, then one query
-    for app connections. With ``plugin_ids``, every pair of the users and
-    those plugins; without, only the plugins each user can see.
-    ``runnable_only`` keeps only the plugins that can run."""
-    users = sorted(set(user_ids))
-    if not users:
-        return []
+    for app connections. ``users`` is a list of ids or a filter on the user
+    table. With ``plugin_ids``, every pair of the users and those plugins;
+    without, only the plugins each user can see. ``runnable_only`` keeps only
+    the plugins that can run."""
+    user_filter: ColumnElement[bool]
+    if isinstance(users, ColumnElement):
+        user_filter = cast(ColumnElement[bool], users)
+    else:
+        user_ids = sorted(set(users))
+        if not user_ids:
+            return []
+        user_filter = User.__table__.c.id.in_(user_ids)
     plugins = sorted(set(plugin_ids)) if plugin_ids is not None else None
     if plugins is not None and not plugins:
         return []
-    pairs = _user_plugin_pairs(User.__table__.c.id.in_(users), plugins)
+    pairs = _user_plugin_pairs(user_filter, plugins)
     enabled = _enabled_in_pairs(pairs)
     skill_names = (
         select(
@@ -484,6 +538,9 @@ def load_user_plugin_states(
             skill_names,
             PluginVersion.unpacked_size_bytes,
             PluginVersion.file_count,
+            UserPluginPreference.enabled,
+            UserPluginPreference.enabled_at,
+            _shared_at(pairs),
         )
         .join(PluginVersion, PluginVersion.id == pairs.c.version_id)
         .outerjoin(UserPluginPreference, _preference_of_pair(pairs))
@@ -525,6 +582,9 @@ def load_user_plugin_states(
                     if row[13] is None and row[14] is None
                     else SkillUsage(bytes=row[13] or 0, files=row[14] or 0)
                 ),
+                turned_on=row[15] is True,
+                enabled_at=row[16],
+                shared_at=row[17],
             )
         )
     return states
@@ -541,6 +601,22 @@ def skill_usage_by_user(states: Iterable[UserPluginState]) -> dict[UUID, SkillUs
                 state.usage or SkillUsage()
             )
     return usage
+
+
+_NO_SKILL_DISK_ACCOUNTS = (
+    AccountType.BOT,
+    AccountType.EXT_PERM_USER,
+    AccountType.ANONYMOUS,
+)
+
+
+def active_skill_user() -> ColumnElement[bool]:
+    """Users the skill limit counts: active accounts that can get a skill
+    disk."""
+    user = User.__table__.c
+    return and_(
+        user.is_active.is_(True), user.account_type.not_in(_NO_SKILL_DISK_ACCOUNTS)
+    )
 
 
 @dataclass(frozen=True)

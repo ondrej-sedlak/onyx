@@ -124,6 +124,7 @@ from onyx.error_handling.error_codes import OnyxErrorCode
 from onyx.error_handling.exceptions import OnyxError
 from onyx.skills.built_in import BUILT_IN_SKILLS
 from onyx.skills.ingest import IngestedBundle
+from onyx.skills.limits import SkillUsage
 from onyx.skills.models import PluginFileEntry
 
 
@@ -155,6 +156,9 @@ class RuntimeSkill:
     name: str
     # None for a built-in skill.
     version: RuntimeSkillVersion | None = None
+    # Recorded size of the version; None for a built-in or a version with no
+    # recorded size.
+    usage: SkillUsage | None = None
 
 
 @dataclass(frozen=True)
@@ -446,9 +450,9 @@ def list_runtime_skills_for_user(
     db_session: Session,
     user: User,
 ) -> list[RuntimeSkill]:
-    """The user's sandbox skills: built-ins, then the custom skills the name
-    order keeps, by name. Each custom skill has the plugin version the user
-    runs."""
+    """The user's sandbox skills in the run-time keep order: built-ins, then
+    the custom skills the name order keeps, by ``UserPluginState.keep_key``.
+    Each custom skill has the plugin version the user runs."""
     built_ins = _runtime_built_in_skills(user, db_session)
     selection = _user_skill_selection(user, db_session, built_ins)
     kept = sorted(
@@ -456,7 +460,7 @@ def list_runtime_skills_for_user(
             selection.states[plugin_id]
             for plugin_id in set(selection.order.kept.values())
         ),
-        key=lambda state: (state.skill_names[0], state.plugin_id),
+        key=lambda state: state.keep_key,
     )
     skill_rows = {
         skill.id: skill
@@ -473,6 +477,7 @@ def list_runtime_skills_for_user(
                 bundle_file_id=state.bundle_file_id,
                 is_valid=state.version_is_valid,
             ),
+            usage=state.usage,
         )
         for state in kept
         if state.plugin_id in skill_rows
