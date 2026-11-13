@@ -6,7 +6,7 @@ The rule, once:
   for the user is not NOT_AVAILABLE; or the user is its author; or a
   plugin__user row; or a plugin__user_group row with a permission for one of
   the user's groups. A group row with no permission holds only a group install
-  setting and grants nothing.
+  setting and grants nothing. A row with a permission cannot be NOT_AVAILABLE.
 - Editable: the author, or EDITOR through plugin__user or plugin__user_group.
   There is no organization-wide edit.
 - Install setting for a user: the company setting is the plugin's own setting,
@@ -69,6 +69,10 @@ from onyx.db.models import (
     User__UserGroup,
     UserGroup,
     UserPluginPreference,
+)
+from onyx.db.scoped_permissions import (
+    managed_group_member_ids_subquery,
+    scoped_group_ids_subquery,
 )
 
 UserIdExpr = UUID | ColumnElement[UUID] | InstrumentedAttribute[UUID]
@@ -225,6 +229,47 @@ def plugin_editable_by_user(
     return or_(
         plugin.author_user_id == user_id,
         plugin_shared_with_user(plugin, user_id, SkillSharePermission.EDITOR),
+    )
+
+
+def plugin_in_managed_scope(
+    plugin: type[Plugin], marketplace: type[Marketplace], manager: User
+) -> ColumnElement[bool]:
+    """H6 and R17: a group manager acts on a plugin that is not published, is
+    shared with a group they manage, and is shared with no other group and no
+    user outside their groups. Fails closed for a user who manages no group."""
+    managed = scoped_group_ids_subquery(manager)
+    group_share = select(Plugin__UserGroup.plugin_id).where(
+        Plugin__UserGroup.plugin_id == plugin.id,
+        Plugin__UserGroup.permission.is_not(None),
+    )
+    user_share_outside = select(Plugin__User.plugin_id).where(
+        Plugin__User.plugin_id == plugin.id,
+        Plugin__User.user_id.not_in(managed_group_member_ids_subquery(manager)),
+    )
+    return and_(
+        marketplace.kind != MarketplaceKind.ORGANIZATION_LIBRARY,
+        group_share.where(Plugin__UserGroup.user_group_id.in_(managed)).exists(),
+        ~group_share.where(Plugin__UserGroup.user_group_id.not_in(managed)).exists(),
+        ~user_share_outside.exists(),
+    )
+
+
+def plugin_ids_in_managed_scope(
+    plugin_ids: Iterable[UUID], manager: User, db_session: Session
+) -> set[UUID]:
+    ids = sorted(set(plugin_ids))
+    if not ids:
+        return set()
+    return set(
+        db_session.scalars(
+            select(Plugin.id)
+            .join(Marketplace, Marketplace.id == Plugin.marketplace_id)
+            .where(
+                Plugin.id.in_(ids),
+                plugin_in_managed_scope(Plugin, Marketplace, manager),
+            )
+        )
     )
 
 
@@ -547,6 +592,15 @@ class PluginAccess:
     user_shares: tuple[PluginUserShare, ...]
     group_shares: tuple[PluginGroupShare, ...]
 
+    # The default of the plugin's marketplace.
+    marketplace_default_policy: PluginInstallationPolicy
+
+    @property
+    def own_installation_policy(self) -> PluginInstallationPolicy:
+        """The plugin's own setting as the skills API shows and writes it. No
+        setting shows as AVAILABLE, and AVAILABLE writes "no setting"."""
+        return self.installation_policy or PluginInstallationPolicy.AVAILABLE
+
 
 def load_plugin_access(
     plugin_ids: Iterable[UUID], user_id: UUID, db_session: Session
@@ -570,6 +624,7 @@ def load_plugin_access(
             author.c.is_active,
             Marketplace.kind == MarketplaceKind.ORGANIZATION_LIBRARY,
             Plugin.installation_policy,
+            Marketplace.default_installation_policy,
             Plugin.current_version_id,
             current.version_number,
             published.version_number,
@@ -634,14 +689,15 @@ def load_plugin_access(
             author_is_active=bool(row[3]),
             published=bool(row[4]),
             installation_policy=row[5],
-            current_version_id=row[6],
-            current_version_number=row[7],
-            published_version_number=row[8],
-            pending_version_number=row[9],
-            version_user_runs=row[10],
-            name=row[11],
-            description=row[12],
-            is_valid=row[13],
+            marketplace_default_policy=row[6],
+            current_version_id=row[7],
+            current_version_number=row[8],
+            published_version_number=row[9],
+            pending_version_number=row[10],
+            version_user_runs=row[11],
+            name=row[12],
+            description=row[13],
+            is_valid=row[14],
             user_shares=tuple(user_shares.get(row[0], ())),
             group_shares=tuple(group_shares.get(row[0], ())),
         )

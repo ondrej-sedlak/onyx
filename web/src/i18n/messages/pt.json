@@ -5201,10 +5201,18 @@
           "description": "Somente administradores publicam habilidades na organização."
         },
         "saveSuccess": {
-          "message": "Configuração de publicação salva."
+          "message": "Configuração salva."
         },
         "saveError": {
-          "message": "Não foi possível salvar a configuração de publicação."
+          "message": "Falha ao salvar a configuração."
+        },
+        "defaultAccess": {
+          "title": "Acesso padrão",
+          "description": "Aplica-se a cada skill publicado sem configuração própria, incluindo os publicados depois."
+        },
+        "sharing": {
+          "title": "Compartilhamento",
+          "description": "Os membros podem compartilhar skills com pessoas e grupos. Os administradores sempre podem compartilhar."
         }
       }
     },
@@ -17446,7 +17454,9 @@
           "availableDescription": "Os usuários podem instalar ou desinstalar a qualquer momento.",
           "defaultDescription": "Instalado automaticamente. Os usuários podem desativar ou desinstalar a qualquer momento.",
           "requiredDescription": "Instalado automaticamente. Os usuários não podem desativar nem desinstalar.",
-          "description": "Escolha como esta habilidade é instalada para quem tem acesso."
+          "description": "Escolha como esta habilidade é instalada para quem tem acesso.",
+          "notAvailable": "Não disponível",
+          "notAvailableDescription": "Oculto. Os membros não conseguem encontrá-lo nem ativá-lo."
         },
         "description": "Escolha quem pode usar esta habilidade e como ela é instalada.",
         "accessTitle": "Quem pode acessar",
@@ -17710,6 +17720,24 @@
       "version": {
         "firstPublish": "v{number} · Primeira publicação",
         "update": "v{number} · Atualização da v{published}"
+      }
+    },
+    "installationPolicy": {
+      "REQUIRED": {
+        "label": "Obrigatório",
+        "description": "Instalado e sempre ativo. Os membros não podem desativá-lo."
+      },
+      "DEFAULT": {
+        "label": "Instalado por padrão",
+        "description": "Instalado para cada membro. Os membros podem desativá-lo."
+      },
+      "AVAILABLE": {
+        "label": "Disponível para instalar",
+        "description": "Os membros o encontram e o ativam se quiserem."
+      },
+      "NOT_AVAILABLE": {
+        "label": "Não disponível",
+        "description": "Oculto. Os membros não podem encontrá-lo nem ativá-lo."
       }
     }
   },

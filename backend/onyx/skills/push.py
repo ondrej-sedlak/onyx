@@ -380,3 +380,10 @@ def push_skills_for_users(user_ids: set[UUID], db_session: Session) -> None:
             logger.exception("Failed to persist successful skill push state")
     except Exception:
         logger.exception("Failed to push skills to sandboxes")
+
+
+def push_skills_and_commit(user_ids: Iterable[UUID], db_session: Session) -> None:
+    """Push to the users after the caller committed the change, and commit the
+    push state."""
+    push_skills_for_users(set(user_ids), db_session)
+    db_session.commit()

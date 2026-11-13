@@ -13,7 +13,7 @@ Open **Craft → Skills** to manage your own library.
   Admins can inspect and manage all custom Skills, including private personal Skills.
   Only Admins set installation policies, because this needs the organization-wide `manage:plugins` permission.
   Group Managers hold `manage:plugins` only for their groups. They cannot set an installation policy,
-  not even for a Skill shared only with their group. Craft needs a Business or Enterprise plan, or Onyx Cloud.
+  for the organization or for a group. Craft needs a Business or Enterprise plan, or Onyx Cloud.
 </Note>
 
 ## Understand the Skills library
@@ -198,6 +198,33 @@ The setting applies to every way to publish: the sharing dialog, **Publish updat
 and GitHub import. Users with the organization-wide `manage:plugins` permission always publish at once.
 Linking a Skill to an App is not affected.
 
+### Set the default access
+
+The **Default Access** setting applies to every published Skill that does not have its own installation policy,
+including Skills that are published later. Open **Admin Panel**, select **Craft → Preferences**,
+and choose a value under **Default Access**:
+
+| Value | Effect |
+| --- | --- |
+| **Available to install** | Members find the Skill and turn it on if they want it. This is the default. |
+| **Installed by default** | Installed for every member. Members can turn it off. |
+| **Not available** | Hidden. Members cannot find it or turn it on. |
+
+**Required** is not a value of this setting, because it would turn on every published Skill for every member.
+
+With **Not available**, a newly published Skill reaches only its author and the people and groups it is shared with.
+Other members get it after an Admin sets an installation policy on the Skill.
+
+### Control who shares
+
+The **Sharing** setting controls whether members can share Skills with people and groups. It is on by default.
+Open **Admin Panel**, select **Craft → Preferences**, and turn **Sharing** on or off.
+
+When **Sharing** is off, Onyx refuses a new share or a change to a share level by a member, and shows why.
+Members can still remove a share. Users with the organization-wide `manage:plugins` permission can always share.
+
+To keep a Skill away from a group, set the Skill to **Not available** and turn **Sharing** off.
+
 ### Review publish requests
 
 Under **Requires review**, a publish from an author makes a request, and the version shows **Pending review**.
@@ -250,6 +277,19 @@ Admins set how a shared Skill is installed for everyone with access:
 | **Required** | Onyx installs it automatically. Users cannot disable or uninstall it. Only Admins can delete it. |
 
 The policy follows the current audience; changing who can access the Skill does not reset it.
+
+### Set a policy for a group
+
+By default, every group uses the organization setting.
+A group policy replaces the organization setting for the members of that group, also when it is stricter.
+A member in several groups gets the most open policy, in this order: **Required**, **Installed by default**,
+**Available to install**, **Not available**. Groups give access. They are not a security boundary:
+a person with a direct share still sees the Skill.
+
+A published Skill can have a group policy without a share. A group with a share (**Can use** or **Can edit**)
+cannot get **Not available**. Remove the share first.
+Only users with the organization-wide `manage:plugins` permission set a group policy.
+Group Managers can still share a private Skill with their groups.
 
 ### Two Skills with the same name
 
@@ -347,6 +387,8 @@ Configure access once before importing the batch. Onyx reports invalid bundles s
 <Accordion title="Users cannot find a shared Skill">
   Confirm that the Skill is enabled and that the user or one of their groups has **Can use** or **Can edit** access.
   If it was shared during an active session, start a new turn or session and check the picker again.
+  For a published Skill with no installation policy of its own, check **Default Access** under **Craft → Preferences**.
+  With **Not available**, only the author and the people and groups it is shared with see it.
 </Accordion>
 
 <Accordion title="A Skill is on but Craft uses a different Skill">

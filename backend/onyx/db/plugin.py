@@ -143,6 +143,47 @@ def get_or_create_organization_library__no_commit(db_session: Session) -> UUID:
     ).one()
 
 
+def get_organization_library_default(db_session: Session) -> PluginInstallationPolicy:
+    """The default install setting of the Organization library: the setting of
+    each published plugin that has none of its own. AVAILABLE before the
+    library exists."""
+    policy = db_session.scalar(
+        select(Marketplace.default_installation_policy).where(
+            Marketplace.kind == MarketplaceKind.ORGANIZATION_LIBRARY
+        )
+    )
+    return policy or PluginInstallationPolicy.AVAILABLE
+
+
+def set_organization_library_default__no_commit(
+    policy: PluginInstallationPolicy, db_session: Session
+) -> set[UUID]:
+    """Set the Organization library default and return the users with a
+    running sandbox who could see an affected plugin before or after. REQUIRED
+    is refused: one switch would force every published plugin on every user."""
+    if policy == PluginInstallationPolicy.REQUIRED:
+        raise OnyxError(
+            OnyxErrorCode.INVALID_INPUT,
+            "The Organization library default cannot be Required.",
+        )
+    library_id = get_or_create_organization_library__no_commit(db_session)
+    library = db_session.scalars(
+        select(Marketplace).where(Marketplace.id == library_id).with_for_update()
+    ).one()
+    affected_ids = list(
+        db_session.scalars(
+            select(Plugin.id).where(
+                Plugin.marketplace_id == library_id,
+                Plugin.installation_policy.is_(None),
+            )
+        )
+    )
+    before = affected_user_ids_for_plugins(affected_ids, db_session)
+    library.default_installation_policy = policy
+    db_session.flush()
+    return before | affected_user_ids_for_plugins(affected_ids, db_session)
+
+
 def free_plugin_name(
     marketplace_id: UUID,
     name: str,
@@ -841,10 +882,20 @@ class PluginUserGrant:
 
 @dataclass(frozen=True)
 class PluginGroupGrant:
+    """A group share. The group keeps its install setting."""
+
     group_id: int
     permission: SkillSharePermission
-    # UNSET keeps the group's install setting. None removes it.
-    installation_policy: PluginInstallationPolicy | None | UnsetType = UNSET
+
+
+@dataclass(frozen=True)
+class PluginGroupSetting:
+    """A group install setting with no change to the group's share. A group
+    with no row gets a setting-only row. None removes the setting, and a row
+    with no permission is then deleted."""
+
+    group_id: int
+    installation_policy: PluginInstallationPolicy | None
 
 
 @dataclass(frozen=True)
@@ -853,11 +904,13 @@ class PluginAccessChange:
     not change anything.
 
     ``company_installation_policy``: UNSET keeps it, None means "use the
-    marketplace default", and a value sets that value. ``on_name_clash``
-    applies when ``publish`` moves a plugin to the Organization library."""
+    marketplace default", and a value sets that value. ``group_settings`` apply
+    after ``group_grants``. ``on_name_clash`` applies when ``publish`` moves a
+    plugin to the Organization library."""
 
     user_grants: tuple[PluginUserGrant, ...] | None = None
     group_grants: tuple[PluginGroupGrant, ...] | None = None
+    group_settings: tuple[PluginGroupSetting, ...] | None = None
     publish: bool = False
     on_name_clash: NameClashAction = "raise"
     company_installation_policy: PluginInstallationPolicy | None | UnsetType = UNSET
@@ -959,34 +1012,64 @@ def _lock_for_access_change(
     }, missing
 
 
+def _new_user_grants(
+    locked: _LockedPlugin, change: PluginAccessChange
+) -> dict[UUID, SkillSharePermission] | None:
+    """The user grants after the change, or None when they do not change. The
+    author never has a grant."""
+    if change.user_grants is None:
+        return None
+    requested = {grant.user_id: grant.permission for grant in change.user_grants}
+    return {
+        user_id: permission
+        for user_id, permission in (
+            requested
+            if change.mode == PluginAccessMode.REPLACE
+            else locked.user_grants | requested
+        ).items()
+        if user_id != locked.plugin.author_user_id
+    }
+
+
 def _new_group_rows(
     locked: _LockedPlugin, change: PluginAccessChange
 ) -> dict[int, PluginGroupRow] | None:
     """The group rows after the change, or None when they do not change. A
-    group keeps its install setting unless the grant sets one. On REPLACE, a
-    group left out loses its permission but keeps its row if it has a
-    setting."""
-    if change.group_grants is None:
+    group keeps its install setting unless a group setting sets one. On
+    REPLACE, a group left out of the grants loses its permission but keeps its
+    row if it has a setting. A row with neither is deleted."""
+    if change.group_grants is None and change.group_settings is None:
         return None
     rows: dict[int, PluginGroupRow] = {}
-    for group_id, row in locked.group_rows.items():
-        if change.mode == PluginAccessMode.ADD_ONLY:
-            rows[group_id] = row
-        elif row.installation_policy is not None:
-            rows[group_id] = PluginGroupRow(
-                permission=None, installation_policy=row.installation_policy
+    if change.group_grants is None:
+        rows = dict(locked.group_rows)
+    else:
+        for group_id, row in locked.group_rows.items():
+            if change.mode == PluginAccessMode.ADD_ONLY:
+                rows[group_id] = row
+            elif row.installation_policy is not None:
+                rows[group_id] = PluginGroupRow(
+                    permission=None, installation_policy=row.installation_policy
+                )
+        for grant in change.group_grants:
+            current = locked.group_rows.get(grant.group_id)
+            rows[grant.group_id] = PluginGroupRow(
+                permission=grant.permission,
+                installation_policy=(
+                    current.installation_policy if current is not None else None
+                ),
             )
-    for grant in change.group_grants:
-        current = locked.group_rows.get(grant.group_id)
-        rows[grant.group_id] = PluginGroupRow(
-            permission=grant.permission,
-            installation_policy=(
-                grant.installation_policy
-                if is_set(grant.installation_policy)
-                else (current.installation_policy if current is not None else None)
-            ),
+    for setting in change.group_settings or ():
+        current = rows.get(setting.group_id)
+        rows[setting.group_id] = PluginGroupRow(
+            permission=current.permission if current is not None else None,
+            installation_policy=setting.installation_policy,
         )
-    return rows
+    return {
+        group_id: row
+        for group_id, row in rows.items()
+        if row.permission is not None or row.installation_policy is not None
+    }
 
 
 def _group_shares(
@@ -999,6 +1082,33 @@ def _group_shares(
     }
 
 
+def _check_sharing_setting(
+    plugins: Mapping[UUID, _LockedPlugin], change: PluginAccessChange
+) -> None:
+    """With the admin Sharing setting off, only an organization-wide manager
+    adds a user or group share or changes its level. Removing a share stays
+    allowed."""
+    adds_share = False
+    for locked in plugins.values():
+        user_grants = _new_user_grants(locked, change) or {}
+        group_shares = _group_shares(_new_group_rows(locked, change) or {})
+        current_groups = _group_shares(locked.group_rows)
+        adds_share = adds_share or any(
+            locked.user_grants.get(user_id) != permission
+            for user_id, permission in user_grants.items()
+        )
+        adds_share = adds_share or any(
+            current_groups.get(group_id) != permission
+            for group_id, permission in group_shares.items()
+        )
+    if adds_share and not load_settings(raise_on_error=True).plugin_sharing:
+        raise OnyxError(
+            OnyxErrorCode.INSUFFICIENT_PERMISSIONS,
+            "Sharing with people and groups is turned off. Ask an admin to "
+            "share this skill.",
+        )
+
+
 def _check_access_change(
     plugins: Mapping[UUID, _LockedPlugin],
     change: PluginAccessChange,
@@ -1006,53 +1116,51 @@ def _check_access_change(
     db_session: Session,
 ) -> None:
     """The checks that apply to the whole set. They raise before any write."""
+    is_global_manager = actor is not None and has_global_permission(
+        actor, Permission.MANAGE_PLUGINS
+    )
     if (
         actor is not None
         and is_set(change.company_installation_policy)
-        and not has_global_permission(actor, Permission.MANAGE_PLUGINS)
+        and not is_global_manager
     ):
         raise OnyxError(
             OnyxErrorCode.INSUFFICIENT_PERMISSIONS,
             "Only an organization-wide skill manager can change the install setting.",
         )
-    if change.group_grants is None:
+    if actor is not None and not is_global_manager:
+        _check_sharing_setting(plugins, change)
+    if (
+        change.group_settings is not None
+        and actor is not None
+        and not is_global_manager
+    ):
+        raise OnyxError(
+            OnyxErrorCode.INSUFFICIENT_PERMISSIONS,
+            "Only an organization-wide skill manager can set a group install setting.",
+        )
+    if change.group_grants is None and change.group_settings is None:
         return
-    requested_group_ids = sorted({grant.group_id for grant in change.group_grants})
-    assert_not_shared_with_default_group(db_session, requested_group_ids)
-
-    any_published = change.publish or any(
-        locked.published for locked in plugins.values()
+    requested_group_ids = sorted(
+        {grant.group_id for grant in change.group_grants or ()}
     )
     setting_group_ids = sorted(
-        {
-            grant.group_id
-            for grant in change.group_grants
-            if is_set(grant.installation_policy)
-        }
+        {setting.group_id for setting in change.group_settings or ()}
     )
-    if setting_group_ids:
-        if actor is not None:
-            if any_published:
-                if not has_global_permission(actor, Permission.MANAGE_PLUGINS):
-                    raise OnyxError(
-                        OnyxErrorCode.INSUFFICIENT_PERMISSIONS,
-                        "Only an organization-wide skill manager can set a "
-                        "group install setting on a published skill.",
-                    )
-            else:
-                assert_within_scope(
-                    actor,
-                    db_session,
-                    permission=Permission.MANAGE_PLUGINS,
-                    current_group_ids=[],
-                    requested_group_ids=setting_group_ids,
-                    is_non_public=True,
+    assert_not_shared_with_default_group(
+        db_session, sorted(set(requested_group_ids) | set(setting_group_ids))
+    )
+    for locked in plugins.values():
+        for row in (_new_group_rows(locked, change) or {}).values():
+            if (
+                row.permission is not None
+                and row.installation_policy == PluginInstallationPolicy.NOT_AVAILABLE
+            ):
+                raise OnyxError(
+                    OnyxErrorCode.INVALID_INPUT,
+                    "A group with a share cannot be Not available. Remove the "
+                    "group's share first.",
                 )
-        # The legacy group table has no install setting column.
-        raise OnyxError(
-            OnyxErrorCode.INVALID_INPUT,
-            "Group install settings are not available yet.",
-        )
 
     # A change to a plugin's group shares is a MANAGE_PLUGINS action. The
     # current shares come from the database, never the request, so a
@@ -1082,23 +1190,24 @@ def _check_access_change(
     )
 
 
+def _legacy_installation_policy(
+    policy: PluginInstallationPolicy | None,
+) -> SkillInstallationPolicy:
+    """The legacy column has no NOT_AVAILABLE. NOT_AVAILABLE and an empty
+    setting write AVAILABLE, so uq_skill_automatic_name does not count them."""
+    if policy in (PluginInstallationPolicy.DEFAULT, PluginInstallationPolicy.REQUIRED):
+        return SkillInstallationPolicy(policy.value)
+    return SkillInstallationPolicy.AVAILABLE
+
+
 def _write_user_grants__no_commit(
     locked: _LockedPlugin, change: PluginAccessChange, db_session: Session
 ) -> None:
-    """Write the user grants after the change, unless they do not change. The
-    author never has a grant. A kept share keeps its created_at."""
-    if change.user_grants is None:
+    """Write the user grants after the change, unless they do not change. A
+    kept share keeps its created_at."""
+    grants = _new_user_grants(locked, change)
+    if grants is None:
         return
-    requested = {grant.user_id: grant.permission for grant in change.user_grants}
-    grants = {
-        user_id: permission
-        for user_id, permission in (
-            requested
-            if change.mode == PluginAccessMode.REPLACE
-            else locked.user_grants | requested
-        ).items()
-        if user_id != locked.plugin.author_user_id
-    }
     plugin_id = locked.plugin.id
     try:
         with db_session.begin_nested():
@@ -1270,18 +1379,9 @@ def _apply_to_plugin__no_commit(
     if is_set(change.company_installation_policy):
         policy = change.company_installation_policy
         if skill is not None:
-            if policy == PluginInstallationPolicy.NOT_AVAILABLE:
-                raise OnyxError(
-                    OnyxErrorCode.INVALID_INPUT,
-                    "A skill cannot be set to Not available yet.",
-                )
             try:
                 with db_session.begin_nested():
-                    skill.installation_policy = (
-                        SkillInstallationPolicy(policy.value)
-                        if policy is not None
-                        else SkillInstallationPolicy.AVAILABLE
-                    )
+                    skill.installation_policy = _legacy_installation_policy(policy)
                     db_session.flush()
             except IntegrityError as exc:
                 if not is_unique_violation(exc, "uq_skill_automatic_name"):
@@ -1315,11 +1415,12 @@ def apply_plugin_access_change__no_commit(
     after the writes. The caller commits, then pushes once.
 
     Rules: a company install setting needs organization-wide MANAGE_PLUGINS. A
-    group install setting needs MANAGE_PLUGINS for that group on a private
-    plugin, and organization-wide MANAGE_PLUGINS on a published one; it is
-    refused after these checks until the legacy group table is gone. A change
-    to group shares must stay within the actor's managed scope. Publishing
-    needs the author or organization-wide MANAGE_PLUGINS.
+    group install setting (``group_settings``) needs organization-wide
+    MANAGE_PLUGINS too. A group row with a permission cannot be
+    NOT_AVAILABLE. A change
+    to group shares must stay within the actor's managed scope. With the admin
+    Sharing setting off, only organization-wide MANAGE_PLUGINS adds shares.
+    Publishing needs the author or organization-wide MANAGE_PLUGINS.
 
     ``actor`` None is a system write that the caller authorized, such as an
     ownership transfer. The permission checks are skipped; the other rules

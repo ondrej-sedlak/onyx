@@ -22,11 +22,13 @@ from onyx.db.external_app import (
 )
 from onyx.db.models import Skill, User
 from onyx.db.plugin import (
+    get_organization_library_default,
     get_plugin_current_version_id,
     get_plugin_version,
     get_stored_version_content,
     list_plugin_versions,
     lock_skill_plugin__no_commit,
+    set_organization_library_default__no_commit,
 )
 from onyx.db.skill import (
     SkillManagementPolicy,
@@ -65,6 +67,7 @@ from onyx.server.features.skill.models import (
     GitHubSkillsImportResponse,
     GitHubSkillsPreviewRequest,
     GitHubSkillsPreviewResponse,
+    OrganizationLibraryDefaultAccess,
     SkillBulkActionRequest,
     SkillBulkFailure,
     SkillBulkResponse,
@@ -114,7 +117,11 @@ from onyx.skills.ingest import (
 from onyx.skills.ingest_from_github import fetch_github_skill_bundles
 from onyx.skills.metadata import parse_skill_document
 from onyx.skills.models import GITHUB_SKILL_MAX_COUNT
-from onyx.skills.push import push_skill_to_affected_sandboxes, push_skills_for_users
+from onyx.skills.push import (
+    push_skill_to_affected_sandboxes,
+    push_skills_and_commit,
+    push_skills_for_users,
+)
 from shared_configs.contextvars import get_current_tenant_id
 
 user_router = APIRouter(prefix="/skills")
@@ -391,6 +398,32 @@ def list_skill_review_requests(
         SkillReviewRequestResponse.model_validate(row, from_attributes=True)
         for row in list_review_requests(db_session)
     ]
+
+
+@user_router.get("/organization-library/default-access")
+def get_organization_library_default_access(
+    _: User = Depends(require_permission(Permission.MANAGE_PLUGINS)),
+    db_session: Session = Depends(get_session),
+) -> OrganizationLibraryDefaultAccess:
+    return OrganizationLibraryDefaultAccess(
+        installation_policy=get_organization_library_default(db_session)
+    )
+
+
+@user_router.put("/organization-library/default-access")
+def set_organization_library_default_access(
+    request: OrganizationLibraryDefaultAccess,
+    _: User = Depends(require_permission(Permission.MANAGE_PLUGINS)),
+    db_session: Session = Depends(get_session),
+) -> OrganizationLibraryDefaultAccess:
+    affected = set_organization_library_default__no_commit(
+        request.installation_policy, db_session
+    )
+    db_session.commit()
+    push_skills_and_commit(affected, db_session)
+    return OrganizationLibraryDefaultAccess(
+        installation_policy=request.installation_policy
+    )
 
 
 @user_router.get("/{skill_id}")
@@ -1115,6 +1148,7 @@ def share_current_user_skill(
     if (
         share_req.user_shares is None
         and share_req.group_shares is None
+        and share_req.group_settings is None
         and "installation_policy" not in share_req.model_fields_set
         and "public_permission" not in share_req.model_fields_set
     ):

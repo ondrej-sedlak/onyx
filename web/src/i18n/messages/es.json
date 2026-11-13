@@ -5201,10 +5201,18 @@
           "description": "Solo los administradores publican habilidades en la organización."
         },
         "saveSuccess": {
-          "message": "Se guardó la configuración de publicación."
+          "message": "Configuración guardada."
         },
         "saveError": {
-          "message": "No se pudo guardar la configuración de publicación."
+          "message": "No se pudo guardar la configuración."
+        },
+        "defaultAccess": {
+          "title": "Acceso predeterminado",
+          "description": "Se aplica a cada skill publicado que no tiene su propia configuración, incluidos los que se publiquen después."
+        },
+        "sharing": {
+          "title": "Compartir",
+          "description": "Los miembros pueden compartir skills con personas y grupos. Los administradores siempre pueden compartir."
         }
       }
     },
@@ -17446,7 +17454,9 @@
           "availableDescription": "Los usuarios pueden instalar o desinstalar en cualquier momento.",
           "defaultDescription": "Se instala automáticamente. Los usuarios pueden desactivar o desinstalar en cualquier momento.",
           "requiredDescription": "Se instala automáticamente. Los usuarios no pueden desactivar ni desinstalar.",
-          "description": "Elige cómo se instala esta habilidad para quienes tienen acceso."
+          "description": "Elige cómo se instala esta habilidad para quienes tienen acceso.",
+          "notAvailable": "No disponible",
+          "notAvailableDescription": "Oculto. Los miembros no pueden encontrarlo ni activarlo."
         },
         "description": "Elige quién puede usar esta habilidad y cómo se instala.",
         "accessTitle": "Quién puede acceder",
@@ -17710,6 +17720,24 @@
       "version": {
         "firstPublish": "v{number} · Primera publicación",
         "update": "v{number} · Actualización de v{published}"
+      }
+    },
+    "installationPolicy": {
+      "REQUIRED": {
+        "label": "Obligatorio",
+        "description": "Instalado y siempre activo. Los miembros no pueden desactivarlo."
+      },
+      "DEFAULT": {
+        "label": "Instalado de forma predeterminada",
+        "description": "Instalado para cada miembro. Los miembros pueden desactivarlo."
+      },
+      "AVAILABLE": {
+        "label": "Disponible para instalar",
+        "description": "Los miembros lo encuentran y lo activan si lo quieren."
+      },
+      "NOT_AVAILABLE": {
+        "label": "No disponible",
+        "description": "Oculto. Los miembros no pueden encontrarlo ni activarlo."
       }
     }
   },
