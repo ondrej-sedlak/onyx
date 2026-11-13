@@ -26,7 +26,7 @@ from enum import Enum
 from typing import Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -762,6 +762,21 @@ def publish_or_request_review__no_commit(
     plugin.published_version_id = version_id
     plugin.pending_version_id = None
     db_session.flush()
+
+
+def make_plugins_available_by_default__no_commit(
+    plugin_ids: Iterable[UUID], db_session: Session
+) -> None:
+    """Give each plugin with no own setting an explicit AVAILABLE, so a stricter
+    marketplace default does not hide it. A plugin's own setting stays."""
+    ids = sorted(set(plugin_ids))
+    if not ids:
+        return
+    db_session.execute(
+        update(Plugin)
+        .where(Plugin.id.in_(ids), Plugin.installation_policy.is_(None))
+        .values(installation_policy=PluginInstallationPolicy.AVAILABLE)
+    )
 
 
 def transfer_plugin__no_commit(

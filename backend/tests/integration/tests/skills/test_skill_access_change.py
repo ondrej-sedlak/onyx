@@ -222,7 +222,7 @@ def test_group_manager_is_refused_outside_their_groups(
     }
 
 
-def test_group_manager_is_refused_a_company_install_setting(
+def test_group_manager_is_refused_install_settings(
     manager_env: tuple[DATestUser, DATestUserGroup, DATestUserGroup],
 ) -> None:
     """A group manager shares within their groups, but only an
@@ -234,6 +234,24 @@ def test_group_manager_is_refused_a_company_install_setting(
 
     single = share_skill(manager, skill.id, {"installation_policy": "DEFAULT"})
     assert single.status_code == 403
+    group_setting = share_skill(
+        manager,
+        skill.id,
+        {
+            "group_settings": [
+                {"group_id": managed.id, "installation_policy": "REQUIRED"}
+            ]
+        },
+    )
+    assert group_setting.status_code == 403
+    assert _group_rows(skill.id) == {managed.id: (SkillSharePermission.VIEWER, None)}
+
+    # A private skill the manager cannot see does not show that it exists.
+    hidden = SkillManager.create_custom(UserManager.create(name=unique_name("hidden")))
+    hidden_setting = {
+        "group_settings": [{"group_id": managed.id, "installation_policy": "DEFAULT"}]
+    }
+    assert share_skill(manager, hidden.id, hidden_setting).status_code == 404
 
     result = _bulk_share(manager, [skill.id], {"installation_policy": "REQUIRED"})
     assert [failure.skill_id for failure in result.failed] == [skill.id]

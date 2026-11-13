@@ -17448,15 +17448,7 @@
         },
         "installation": {
           "title": "Installation",
-          "available": "Disponible à l’installation",
-          "default": "Installé par défaut",
-          "required": "Obligatoire",
-          "availableDescription": "Les utilisateurs peuvent installer ou désinstaller à tout moment.",
-          "defaultDescription": "Installé automatiquement. Les utilisateurs peuvent désactiver ou désinstaller à tout moment.",
-          "requiredDescription": "Installé automatiquement. Les utilisateurs ne peuvent ni désactiver ni désinstaller.",
-          "description": "Choisissez comment cette compétence est installée pour les personnes ayant accès.",
-          "notAvailable": "Non disponible",
-          "notAvailableDescription": "Masqué. Les membres ne peuvent ni le trouver ni l'activer."
+          "description": "Choisissez comment cette compétence est installée pour les personnes ayant accès."
         },
         "description": "Choisissez qui peut utiliser cette compétence et comment elle est installée.",
         "accessTitle": "Qui peut accéder",
@@ -17479,6 +17471,15 @@
         "publishOff": {
           "title": "La publication est désactivée",
           "description": "Un administrateur a désactivé la publication dans l'organisation. Demandez à un administrateur de publier cette compétence."
+        },
+        "groupAccess": {
+          "title": "Accès des groupes",
+          "description": "Par défaut, chaque groupe utilise le paramètre de l'organisation. Un paramètre de groupe le remplace pour les membres du groupe, même s'il est plus strict.",
+          "add": "Ajouter un groupe",
+          "select": "Paramètre pour {name}",
+          "remove": "Retirer {name}",
+          "shared": "Partagé avec ce groupe",
+          "settingOnly": "Paramètre de groupe uniquement"
         }
       },
       "placeholders": {
@@ -17563,7 +17564,8 @@
       "empty": {
         "noMatches": {
           "description": "Essayez une autre recherche.",
-          "title": "Aucune compétence correspondante"
+          "title": "Aucune compétence correspondante",
+          "groupDescription": "Aucune compétence de ce groupe ne correspond. Essayez un autre groupe ou une autre recherche."
         },
         "noSkills": {
           "title": "Aucune compétence personnalisée pour le moment",
@@ -17738,7 +17740,20 @@
       "NOT_AVAILABLE": {
         "label": "Non disponible",
         "description": "Masqué. Les membres ne peuvent ni le trouver ni l'activer."
+      },
+      "inherit": {
+        "label": "{scope, select, group {Paramètre de l'organisation} other {Accès par défaut}}",
+        "labelWithPolicy": "{scope, select, group {Paramètre de l'organisation ({policy})} other {Accès par défaut ({policy})}}",
+        "description": "{scope, select, group {Aucun paramètre de groupe. Le groupe utilise le paramètre de l'organisation.} other {Aucun paramètre propre. La compétence utilise l'accès par défaut, même après une modification par un administrateur.}}"
       }
+    },
+    "groups": {
+      "filter": {
+        "placeholder": "Filtrer par groupe",
+        "all": "Tous les groupes"
+      },
+      "card": "Groupes : {groups}",
+      "entry": "{name} : {policy}"
     }
   },
   "opensearchHealth": {

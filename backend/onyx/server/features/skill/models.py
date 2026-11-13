@@ -34,6 +34,17 @@ class SkillGroupShare(BaseModel):
     permission: SkillSharePermission
 
 
+class SkillGroupSummary(BaseModel):
+    """One group row of a skill: a share, a group install setting, or both."""
+
+    group_id: int
+    group_name: str
+    # None for a row that holds only a setting.
+    permission: SkillSharePermission | None
+    # None: the group uses the company setting.
+    installation_policy: PluginInstallationPolicy | None
+
+
 class SkillExternalAppDependencyResponse(BaseModel):
     external_app_id: int
     name: str
@@ -53,8 +64,9 @@ class SkillResponse(BaseModel):
 
     enabled: bool
     can_toggle: bool
-    # The skill's own company setting; AVAILABLE when it has none.
-    installation_policy: PluginInstallationPolicy = PluginInstallationPolicy.AVAILABLE
+    # The skill's own company setting. None: it follows the default of its
+    # marketplace. Built-ins report AVAILABLE.
+    installation_policy: PluginInstallationPolicy | None = None
     # The default of the skill's marketplace. None for built-ins.
     default_installation_policy: PluginInstallationPolicy | None = None
     author_user_id: UUID | None = None
@@ -65,6 +77,8 @@ class SkillResponse(BaseModel):
     updated_at: datetime.datetime | None = None
     user_shares: list[SkillUserShare] = Field(default_factory=list)
     group_shares: list[SkillGroupShare] = Field(default_factory=list)
+    # Every group row the caller may see, with its setting.
+    group_summaries: list[SkillGroupSummary] = Field(default_factory=list)
     public_permission: SkillSharePermission | None = None
     is_personal: bool = False
     user_permission: SkillAccessLevel | None = None
@@ -97,6 +111,7 @@ class SkillResponse(BaseModel):
             unavailable_reason=definition.unavailable_reason,
             enabled=enabled,
             can_toggle=can_toggle,
+            installation_policy=PluginInstallationPolicy.AVAILABLE,
             user_permission=SkillAccessLevel.VIEWER,
             external_app=external_app,
         )
@@ -111,6 +126,7 @@ class SkillResponse(BaseModel):
         can_toggle: bool = True,
         user_permission: SkillAccessLevel | None = None,
         include_share_details: bool = False,
+        group_summaries: list[SkillGroupSummary] | None = None,
         external_app: SkillExternalAppDependencyResponse | None = None,
         current_version_id: UUID | None = None,
     ) -> "SkillResponse":
@@ -143,9 +159,7 @@ class SkillResponse(BaseModel):
             ),
             is_valid=access.is_valid if access is not None else None,
             installation_policy=(
-                access.own_installation_policy
-                if access is not None
-                else PluginInstallationPolicy.AVAILABLE
+                access.installation_policy if access is not None else None
             ),
             default_installation_policy=(
                 access.marketplace_default_policy if access is not None else None
@@ -166,6 +180,7 @@ class SkillResponse(BaseModel):
             updated_at=skill.updated_at,
             user_shares=user_shares if include_share_details else [],
             group_shares=group_shares if include_share_details else [],
+            group_summaries=group_summaries or [],
             public_permission=SkillSharePermission.VIEWER if published else None,
             is_personal=not published and not user_shares and not group_shares,
             user_permission=user_permission,
@@ -427,7 +442,8 @@ class SkillBulkSharing(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Missing: unchanged. Null or AVAILABLE: the marketplace default.
+    # Missing: unchanged. Null: no own setting, so the marketplace default
+    # applies. A value, AVAILABLE too, is the skill's own setting.
     installation_policy: PluginInstallationPolicy | None = None
 
     user_shares: list[SkillUserShareRequest] | None = None

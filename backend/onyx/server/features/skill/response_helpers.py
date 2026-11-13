@@ -29,6 +29,7 @@ from onyx.error_handling.error_codes import OnyxErrorCode
 from onyx.error_handling.exceptions import OnyxError
 from onyx.server.features.skill.models import (
     SkillExternalAppDependencyResponse,
+    SkillGroupSummary,
     SkillPreviewResponse,
     SkillResponse,
     SkillsList,
@@ -118,6 +119,30 @@ def _managed_scope(
     )
 
 
+def _group_summaries(
+    access: PluginAccess | None,
+    user_permission: SkillAccessLevel | None,
+    managed_user_group_ids: set[int] | None,
+) -> list[SkillGroupSummary]:
+    """The group rows the caller may see: every row for a user who may edit
+    the skill (the rule of the share details), else the rows of the groups a
+    scoped manager manages."""
+    if access is None:
+        return []
+    can_edit = user_permission in (SkillAccessLevel.OWNER, SkillAccessLevel.EDITOR)
+    managed = managed_user_group_ids or set()
+    return [
+        SkillGroupSummary(
+            group_id=row.group_id,
+            group_name=row.group_name,
+            permission=row.permission,
+            installation_policy=row.installation_policy,
+        )
+        for row in access.group_rows
+        if can_edit or row.group_id in managed
+    ]
+
+
 def skill_response_for_user(
     skill: Skill,
     user: User,
@@ -159,19 +184,23 @@ def skill_response_for_user(
     access = plugin_access.get(skill.id)
     if shown_version_id is None and access is not None:
         shown_version_id = access.current_version_id
+    user_permission = user_permission_for_skill(
+        skill,
+        access,
+        user,
+        user_group_ids,
+        skill.id in managed_scope_ids,
+    )
     return SkillResponse.from_custom(
         skill,
         access,
         enabled=state.enabled,
         can_toggle=state.can_toggle,
-        user_permission=user_permission_for_skill(
-            skill,
-            access,
-            user,
-            user_group_ids,
-            skill.id in managed_scope_ids,
-        ),
+        user_permission=user_permission,
         include_share_details=include_share_details,
+        group_summaries=_group_summaries(
+            access, user_permission, managed_user_group_ids
+        ),
         external_app=_dependency_response(state.external_app_dependency),
         current_version_id=shown_version_id,
     )

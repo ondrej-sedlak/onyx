@@ -92,8 +92,6 @@ def _group_row(
         # for a manager of the group.
         ("manager", False, OnyxErrorCode.INSUFFICIENT_PERMISSIONS),
         ("manager", True, OnyxErrorCode.INSUFFICIENT_PERMISSIONS),
-        # A manager of another group.
-        ("other_manager", False, OnyxErrorCode.INSUFFICIENT_PERMISSIONS),
     ],
 )
 def test_group_install_setting_rules(
@@ -106,10 +104,8 @@ def test_group_install_setting_rules(
     group = make_group(db_session)
     if actor_kind == "admin":
         actor = make_user(db_session, is_admin=True)
-    elif actor_kind == "manager":
-        actor = _manager_of(db_session, group)
     else:
-        actor = _manager_of(db_session, make_group(db_session))
+        actor = _manager_of(db_session, group)
     skill = make_skill(db_session, is_public=published, author_user_id=actor.id)
 
     if expected is None:

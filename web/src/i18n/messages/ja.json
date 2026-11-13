@@ -17448,15 +17448,7 @@
         },
         "installation": {
           "title": "インストール",
-          "available": "インストール可能",
-          "default": "デフォルトでインストール",
-          "required": "必須",
-          "availableDescription": "ユーザーはいつでもインストールまたはアンインストールできます。",
-          "defaultDescription": "自動でインストールされます。ユーザーはいつでも無効化またはアンインストールできます。",
-          "requiredDescription": "自動でインストールされます。ユーザーは無効化またはアンインストールできません。",
-          "description": "アクセス権を持つ全員に対するスキルのインストール方法を選択します。",
-          "notAvailable": "利用不可",
-          "notAvailableDescription": "非表示。メンバーは見つけることも有効にすることもできません。"
+          "description": "アクセス権を持つ全員に対するスキルのインストール方法を選択します。"
         },
         "description": "このスキルを使用できるユーザーとインストール方法を選択します。",
         "accessTitle": "アクセス範囲",
@@ -17479,6 +17471,15 @@
         "publishOff": {
           "title": "公開はオフになっています",
           "description": "管理者が組織への公開をオフにしました。このスキルの公開を管理者に依頼してください。"
+        },
+        "groupAccess": {
+          "title": "グループアクセス",
+          "description": "デフォルトでは、各グループは組織の設定を使用します。グループの設定は、より厳しい場合でも、そのグループのメンバーに対して組織の設定を置き換えます。",
+          "add": "グループを追加",
+          "select": "{name} の設定",
+          "remove": "{name} を削除",
+          "shared": "このグループと共有済み",
+          "settingOnly": "グループ設定のみ"
         }
       },
       "placeholders": {
@@ -17563,7 +17564,8 @@
       "empty": {
         "noMatches": {
           "description": "別の検索をお試しください。",
-          "title": "一致するスキルがありません"
+          "title": "一致するスキルがありません",
+          "groupDescription": "このグループに一致するスキルはありません。別のグループまたは検索を試してください。"
         },
         "noSkills": {
           "title": "カスタムスキルはまだありません",
@@ -17738,7 +17740,20 @@
       "NOT_AVAILABLE": {
         "label": "利用不可",
         "description": "非表示です。メンバーは見つけることもオンにすることもできません。"
+      },
+      "inherit": {
+        "label": "{scope, select, group {組織の設定} other {デフォルトのアクセス}}",
+        "labelWithPolicy": "{scope, select, group {組織の設定（{policy}）} other {デフォルトのアクセス（{policy}）}}",
+        "description": "{scope, select, group {グループ設定はありません。グループは組織の設定を使用します。} other {独自の設定はありません。管理者が変更した後も、スキルはデフォルトアクセスを使用します。}}"
       }
+    },
+    "groups": {
+      "filter": {
+        "placeholder": "グループで絞り込む",
+        "all": "すべてのグループ"
+      },
+      "card": "グループ: {groups}",
+      "entry": "{name}: {policy}"
     }
   },
   "opensearchHealth": {

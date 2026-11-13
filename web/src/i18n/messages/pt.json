@@ -17448,15 +17448,7 @@
         },
         "installation": {
           "title": "Instalação",
-          "available": "Disponível para instalar",
-          "default": "Instalado por padrão",
-          "required": "Obrigatório",
-          "availableDescription": "Os usuários podem instalar ou desinstalar a qualquer momento.",
-          "defaultDescription": "Instalado automaticamente. Os usuários podem desativar ou desinstalar a qualquer momento.",
-          "requiredDescription": "Instalado automaticamente. Os usuários não podem desativar nem desinstalar.",
-          "description": "Escolha como esta habilidade é instalada para quem tem acesso.",
-          "notAvailable": "Não disponível",
-          "notAvailableDescription": "Oculto. Os membros não conseguem encontrá-lo nem ativá-lo."
+          "description": "Escolha como esta habilidade é instalada para quem tem acesso."
         },
         "description": "Escolha quem pode usar esta habilidade e como ela é instalada.",
         "accessTitle": "Quem pode acessar",
@@ -17479,6 +17471,15 @@
         "publishOff": {
           "title": "A publicação está desativada",
           "description": "Um administrador desativou a publicação na organização. Peça a um administrador para publicar esta habilidade."
+        },
+        "groupAccess": {
+          "title": "Acesso de grupos",
+          "description": "Por padrão, cada grupo usa a configuração da organização. Uma configuração de grupo a substitui para os membros do grupo, também quando é mais restrita.",
+          "add": "Adicionar um grupo",
+          "select": "Configuração de {name}",
+          "remove": "Remover {name}",
+          "shared": "Compartilhado com este grupo",
+          "settingOnly": "Somente configuração do grupo"
         }
       },
       "placeholders": {
@@ -17563,7 +17564,8 @@
       "empty": {
         "noMatches": {
           "description": "Tente uma pesquisa diferente.",
-          "title": "Nenhuma habilidade correspondente"
+          "title": "Nenhuma habilidade correspondente",
+          "groupDescription": "Nenhuma skill deste grupo corresponde. Tente outro grupo ou outra pesquisa."
         },
         "noSkills": {
           "title": "Ainda não há habilidades personalizadas",
@@ -17738,7 +17740,20 @@
       "NOT_AVAILABLE": {
         "label": "Não disponível",
         "description": "Oculto. Os membros não podem encontrá-lo nem ativá-lo."
+      },
+      "inherit": {
+        "label": "{scope, select, group {Configuração da organização} other {Acesso padrão}}",
+        "labelWithPolicy": "{scope, select, group {Configuração da organização ({policy})} other {Acesso padrão ({policy})}}",
+        "description": "{scope, select, group {Sem configuração de grupo. O grupo usa a configuração da organização.} other {Sem configuração própria. A skill usa o acesso padrão, também depois que um administrador o altera.}}"
       }
+    },
+    "groups": {
+      "filter": {
+        "placeholder": "Filtrar por grupo",
+        "all": "Todos os grupos"
+      },
+      "card": "Grupos: {groups}",
+      "entry": "{name}: {policy}"
     }
   },
   "opensearchHealth": {

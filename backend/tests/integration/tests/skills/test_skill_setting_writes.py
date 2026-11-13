@@ -83,7 +83,7 @@ def test_organization_library_default_not_available(
     assert skill.id not in visible_skill_ids(group_member)
     assert skill.id not in visible_skill_ids(other)
     shown = SkillManager.get_for_user(skill.id, shared)
-    assert shown.installation_policy == PluginInstallationPolicy.AVAILABLE
+    assert shown.installation_policy is None
     assert shown.default_installation_policy == PluginInstallationPolicy.NOT_AVAILABLE
     # The share gives Available: off until the user turns it on.
     assert not shown.enabled and shown.can_toggle
@@ -149,6 +149,11 @@ def test_shared_group_with_not_available_is_refused(admin_user: DATestUser) -> N
     setting_first = SkillManager.create_custom(admin_user, is_public=True)
     share_skill(admin_user, setting_first.id, not_available).raise_for_status()
     assert share_skill(admin_user, setting_first.id, share).status_code == 400
+    [row] = SkillManager.get_for_user(setting_first.id, admin_user).group_summaries
+    assert (row.permission, row.installation_policy) == (
+        None,
+        PluginInstallationPolicy.NOT_AVAILABLE,
+    )
 
 
 def test_member_share_is_refused_while_sharing_is_off(
