@@ -26,7 +26,6 @@ from onyx.server.features.build.db.sandbox import (
 )
 from onyx.server.features.build.sandbox.factory import get_sandbox_manager
 from onyx.server.features.build.sandbox.image.sandbox_daemon.extract import (
-    MAX_BUNDLE_BYTES,
     MAX_FILE_BYTES,
 )
 from onyx.server.features.build.sandbox.models import FileSet
@@ -137,7 +136,7 @@ def _omission_reason(
     used: SkillUsage, usage: SkillUsage
 ) -> Literal["bytes", "files"] | None:
     """Why ``usage`` does not fit the run-time limit next to ``used``, or None
-    when it fits."""
+    when it fits. The byte limit is also the transport cap of a push."""
     total = used + usage
     if total.bytes > SKILL_RUNTIME_MAX_BYTES:
         return "bytes"
@@ -256,14 +255,12 @@ def _assemble_skills(
     The run-time limit applies to one running total: a skill that does not
     fit is left out, and later ones still load if they fit. A custom skill
     counts its recorded size, or the files sent when they are larger (with
-    ``${CLAUDE_SKILL_DIR}`` resolved). The recorded size decides before the
-    bundle is read. A skill that would pass the transport cap
-    (``MAX_BUNDLE_BYTES``) is skipped.
+    ``${CLAUDE_SKILL_DIR}`` resolved), so the total also keeps the push within
+    the transport cap. The recorded size decides before the bundle is read.
     """
     files: FileSet = {}
     omissions: list[SkillOmission] = []
     used = SkillUsage()
-    sent = 0
     seen_names: set[str] = set()
     validity_updates: list[SkillValidityUpdate] = []
     file_store = get_default_file_store()
@@ -338,16 +335,9 @@ def _assemble_skills(
         size = _larger(size, _usage_of(skill_files))
         if left_out(runtime_skill, size):
             continue
-        sent_size = _usage_of(skill_files).bytes
-        if sent + sent_size > MAX_BUNDLE_BYTES:
-            logger.warning(
-                "Skipping skill %s: the skills exceed the sandbox size limit", name
-            )
-            continue
         files.update(skill_files)
         seen_names.add(name)
         used += size
-        sent += sent_size
 
     try:
         persist_skill_validity(validity_updates)
